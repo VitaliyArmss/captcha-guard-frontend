@@ -3,23 +3,29 @@ import { useEffect, useRef, useState } from 'react';
 // In production, configure VITE_API_BASE_URL to the absolute API origin, e.g.
 // https://api.example.com. In local development, an empty value uses Vite's /api proxy.
 const rawApiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim();
+
 const API_BASE_URL = (() => {
   if (!rawApiBaseUrl) return import.meta.env.DEV ? '' : null;
 
   try {
     const parsed = new URL(rawApiBaseUrl);
     const isHttp = parsed.protocol === 'http:' || parsed.protocol === 'https:';
-    const isOriginOnly = parsed.pathname === '/' && !parsed.search && !parsed.hash;
     const isSecureInProduction = !import.meta.env.PROD || parsed.protocol === 'https:';
-    if (!isHttp || !isOriginOnly || !isSecureInProduction) return null;
-    return parsed.origin;
+
+    if (!isHttp || !isSecureInProduction || parsed.search || parsed.hash) {
+      return null;
+    }
+
+    return parsed.origin + parsed.pathname.replace(/\/+$/, '');
   } catch {
     return null;
   }
 })();
 
 function apiUrl(path) {
-  return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+  if (!API_BASE_URL) return path;
+
+  return `${API_BASE_URL}/${path.replace(/^\/+/, '')}`;
 }
 
 let turnstileScriptPromise;
