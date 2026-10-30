@@ -1,5 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
 
+// In production, configure VITE_API_BASE_URL to the absolute API origin, e.g.
+// https://api.example.com. In local development, an empty value uses Vite's /api proxy.
+const rawApiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim();
+const API_BASE_URL = (() => {
+  if (!rawApiBaseUrl) return import.meta.env.DEV ? '' : null;
+
+  try {
+    const parsed = new URL(rawApiBaseUrl);
+    const isHttp = parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    const isOriginOnly = parsed.pathname === '/' && !parsed.search && !parsed.hash;
+    const isSecureInProduction = !import.meta.env.PROD || parsed.protocol === 'https:';
+    if (!isHttp || !isOriginOnly || !isSecureInProduction) return null;
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+})();
+
+function apiUrl(path) {
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+}
+
 let turnstileScriptPromise;
 
 function loadTurnstile() {
@@ -37,7 +59,16 @@ export default function App() {
 
     async function initialize() {
       try {
-        const response = await fetch('/api/captcha/config', { cache: 'no-store' });
+        if (API_BASE_URL === null) {
+          setConfigured(false);
+          setStatus({
+            kind: 'error',
+            text: 'API не настроен. Укажите абсолютный HTTPS-адрес в VITE_API_BASE_URL и пересоберите frontend.'
+          });
+          return;
+        }
+
+        const response = await fetch(apiUrl('/api/captcha/config'), { cache: 'no-store' });
         if (!response.ok) throw new Error('Не удалось получить настройки сервера.');
         const config = await response.json();
         if (cancelled) return;
@@ -90,7 +121,7 @@ export default function App() {
     setStatus({ kind: 'info', text: 'Проверяем токен на сервере…' });
 
     try {
-      const response = await fetch('/api/captcha/verify', {
+      const response = await fetch(apiUrl('/api/captcha/verify'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',
